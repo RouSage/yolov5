@@ -492,7 +492,6 @@ if __name__ == '__main__':
                         help='maximum number of dataloader workers')
     parser.add_argument('--project', default='runs/train',
                         help='save to project/name')
-    parser.add_argument('--entity', default=None, help='W&B entity')
     parser.add_argument('--name', default='exp', help='save to project/name')
     parser.add_argument('--exist-ok', action='store_true',
                         help='existing project/name ok, do not increment')
@@ -500,10 +499,6 @@ if __name__ == '__main__':
     parser.add_argument('--linear-lr', action='store_true', help='linear LR')
     parser.add_argument('--label-smoothing', type=float,
                         default=0.0, help='Label smoothing epsilon')
-    parser.add_argument('--upload_dataset', action='store_true',
-                        help='Upload dataset as W&B artifact table')
-    parser.add_argument('--bbox_interval', type=int, default=-1,
-                        help='Set bounding-box image logging interval for W&B')
     parser.add_argument('--save_period', type=int, default=-1,
                         help='Log model after every "save_period" epoch')
     parser.add_argument('--artifact_alias', type=str, default="latest",
