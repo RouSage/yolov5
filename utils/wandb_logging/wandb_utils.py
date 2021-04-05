@@ -3,20 +3,20 @@ import json
 import os
 import shutil
 import sys
-import torch
-import yaml
 from datetime import datetime
 from pathlib import Path
+
+import torch
+import yaml
 from tqdm import tqdm
 
 sys.path.append(str(Path(__file__).parent.parent.parent))  # add utils/ to path
-from utils.datasets import LoadImagesAndLabels
-from utils.datasets import img2label_paths
-from utils.general import colorstr, xywh2xyxy, check_dataset
+from utils.datasets import LoadImagesAndLabels, img2label_paths
+from utils.general import check_dataset, colorstr, xywh2xyxy
 
 try:
     import wandb
-    from wandb import init, finish
+    from wandb import finish, init
 except ImportError:
     wandb = None
 
@@ -63,7 +63,7 @@ def process_wandb_config_ddp_mode(opt):
         train_dir = train_artifact.download()
         train_path = Path(train_dir) / 'data/images/'
         data_dict['train'] = str(train_path)
-        
+
     if data_dict['val'].startswith(WANDB_ARTIFACT_PREFIX):
         api = wandb.Api()
         val_artifact = api.artifact(remove_prefix(data_dict['val']) + ':' + opt.artifact_alias)
@@ -71,12 +71,12 @@ def process_wandb_config_ddp_mode(opt):
         val_path = Path(val_dir) / 'data/images/'
         data_dict['val'] = str(val_path)
     if train_dir or val_dir:
-        ddp_data_path = str(Path(val_dir) / 'wandb_local_data.yaml') 
+        ddp_data_path = str(Path(val_dir) / 'wandb_local_data.yaml')
         with open(ddp_data_path, 'w') as f:
             yaml.dump(data_dict, f)
         opt.data = ddp_data_path
-    
-        
+
+
 
 class WandbLogger():
     def __init__(self, opt, name, run_id, data_dict, job_type='Training'):
@@ -84,7 +84,7 @@ class WandbLogger():
         self.job_type = job_type
         self.wandb, self.wandb_run, self.data_dict = wandb, None if not wandb else wandb.run, data_dict
         # It's more elegant to stick to 1 wandb.init call, but useful config data is overwritten in the WandbLogger's wandb.init call
-        if isinstance(opt.resume, str): # checks resume from artifact 
+        if isinstance(opt.resume, str): # checks resume from artifact
             if opt.resume.startswith(WANDB_ARTIFACT_PREFIX):
                 run_id, project, model_artifact_name = get_run_info(opt.resume)
                 model_artifact_name = WANDB_ARTIFACT_PREFIX + model_artifact_name
@@ -98,7 +98,7 @@ class WandbLogger():
                                         project='YOLOv5' if opt.project == 'runs/train' else Path(opt.project).stem,
                                         name=name,
                                         job_type=job_type,
-                                        id=run_id) if not wandb.run else wandb.run      
+                                        id=run_id) if not wandb.run else wandb.run
         if self.wandb_run:
             if self.job_type == 'Training':
                 if not opt.resume:
