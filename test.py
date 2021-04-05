@@ -27,7 +27,6 @@ def test(data,
          conf_thres=0.001,
          iou_thres=0.6,  # for NMS
          save_json=False,
-         single_cls=False,
          augment=False,
          verbose=False,
          model=None,
@@ -73,7 +72,7 @@ def test(data,
         with open(data) as f:
             data = yaml.load(f, Loader=yaml.SafeLoader)
     check_dataset(data)  # check
-    nc = 1 if single_cls else int(data['nc'])  # number of classes
+    nc = int(data['nc'])  # number of classes
     iouv = torch.linspace(0.5, 0.95, 10).to(
         device)  # iou vector for mAP@0.5:0.95
     niou = iouv.numel()
@@ -315,8 +314,6 @@ if __name__ == '__main__':
                         help='train, val, test, speed or study')
     parser.add_argument('--device', default='',
                         help='cuda device, i.e. 0 or cpu')
-    parser.add_argument('--single-cls', action='store_true',
-                        help='treat as single-class dataset')
     parser.add_argument('--augment', action='store_true',
                         help='augmented inference')
     parser.add_argument('--verbose', action='store_true',
@@ -348,7 +345,6 @@ if __name__ == '__main__':
              opt.conf_thres,
              opt.iou_thres,
              opt.save_json,
-             opt.single_cls,
              opt.augment,
              opt.verbose,
              save_txt=opt.save_txt | opt.save_hybrid,
