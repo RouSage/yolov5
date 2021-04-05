@@ -18,7 +18,6 @@ import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
 import yaml
 from torch.cuda import amp
-from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from models.experimental import attempt_load
@@ -40,7 +39,7 @@ from utils.torch_utils import (ModelEMA, intersect_dicts, is_parallel,
 logger = logging.getLogger(__name__)
 
 
-def train(hyp, opt, device, tb_writer=None):
+def train(hyp, opt, device):
     logger.info(colorstr('hyperparameters: ') +
                 ', '.join(f'{k}={v}' for k, v in hyp.items()))
     save_dir, epochs, batch_size, total_batch_size, weights, rank = \
@@ -213,8 +212,6 @@ def train(hyp, opt, device, tb_writer=None):
             c = torch.tensor(labels[:, 0])  # classes
             if plots:
                 plot_labels(labels, names, save_dir)
-                if tb_writer:
-                    tb_writer.add_histogram('classes', c, 0)
 
             # Anchors
             if not opt.noautoanchor:
@@ -350,9 +347,6 @@ def train(hyp, opt, device, tb_writer=None):
                     f = save_dir / f'train_batch{ni}.jpg'  # filename
                     Thread(target=plot_images, args=(
                         imgs, targets, paths, f), daemon=True).start()
-                    # if tb_writer:
-                    #     tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
-                    #     tb_writer.add_graph(model, imgs)  # add model to tensorboard
 
             # end batch ------------------------------------------------------------------------------------------------
         # end epoch ----------------------------------------------------------------------------------------------------
@@ -390,9 +384,6 @@ def train(hyp, opt, device, tb_writer=None):
                     'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/mAP_0.5:0.95',
                     'val/box_loss', 'val/obj_loss', 'val/cls_loss',  # val loss
                     'x/lr0', 'x/lr1', 'x/lr2']  # params
-            for x, tag in zip(list(mloss[:-1]) + list(results) + lr, tags):
-                if tb_writer:
-                    tb_writer.add_scalar(tag, x, epoch)  # tensorboard
 
             # Update best mAP
             # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
@@ -442,7 +433,6 @@ def train(hyp, opt, device, tb_writer=None):
                                           is_coco=is_coco)
 
         # Strip optimizers
-        final = best if best.exists() else last  # final model
         for f in last, best:
             if f.exists():
                 strip_optimizer(f)  # strip optimizers
@@ -551,13 +541,7 @@ if __name__ == '__main__':
     # Train
     logger.info(opt)
     if not opt.evolve:
-        tb_writer = None  # init loggers
-        if opt.global_rank in [-1, 0]:
-            prefix = colorstr('tensorboard: ')
-            logger.info(
-                f"{prefix}Start with 'tensorboard --logdir {opt.project}', view at http://localhost:6006/")
-            tb_writer = SummaryWriter(opt.save_dir)  # Tensorboard
-        train(hyp, opt, device, tb_writer)
+        train(hyp, opt, device)
 
     # Evolve hyperparameters (optional)
     else:
