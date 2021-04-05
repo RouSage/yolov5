@@ -384,9 +384,6 @@ def train(hyp, opt, device, tb_writer=None):
             with open(results_file, 'a') as f:
                 # append metrics, val_loss
                 f.write(s + '%10.4g' * 7 % results + '\n')
-            if len(opt.name) and opt.bucket:
-                os.system('gsutil cp %s gs://%s/results/results%s.txt' %
-                          (results_file, opt.bucket, opt.name))
 
             # Log
             tags = ['train/box_loss', 'train/obj_loss', 'train/cls_loss',  # train loss
@@ -449,8 +446,6 @@ def train(hyp, opt, device, tb_writer=None):
         for f in last, best:
             if f.exists():
                 strip_optimizer(f)  # strip optimizers
-        if opt.bucket:
-            os.system(f'gsutil cp {final} gs://{opt.bucket}/weights')  # upload
     else:
         dist.destroy_process_group()
     torch.cuda.empty_cache()
@@ -483,7 +478,6 @@ if __name__ == '__main__':
                         help='disable autoanchor check')
     parser.add_argument('--evolve', action='store_true',
                         help='evolve hyperparameters')
-    parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache-images', action='store_true',
                         help='cache images for faster training')
     parser.add_argument('--image-weights', action='store_true',
@@ -613,9 +607,6 @@ if __name__ == '__main__':
         # ei = [isinstance(x, (int, float)) for x in hyp.values()]  # evolvable indices
         yaml_file = Path(opt.save_dir) / \
             'hyp_evolved.yaml'  # save best result here
-        if opt.bucket:
-            os.system('gsutil cp gs://%s/evolve.txt .' %
-                      opt.bucket)  # download evolve.txt if exists
 
         for _ in range(300):  # generations to evolve
             if Path('evolve.txt').exists():  # if evolve.txt exists: select best hyps and mutate
@@ -656,7 +647,7 @@ if __name__ == '__main__':
             results = train(hyp.copy(), opt, device)
 
             # Write mutation results
-            print_mutation(hyp.copy(), results, yaml_file, opt.bucket)
+            print_mutation(hyp.copy(), results, yaml_file)
 
         # Plot results
         plot_evolution(yaml_file)
