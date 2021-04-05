@@ -24,18 +24,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-@contextmanager
-def torch_distributed_zero_first(local_rank: int):
-    """
-    Decorator to make all processes in distributed training wait for each local_master to do something.
-    """
-    if local_rank not in [-1, 0]:
-        torch.distributed.barrier()
-    yield
-    if local_rank == 0:
-        torch.distributed.barrier()
-
-
 def init_torch_seeds(seed=0):
     # Speed-reproducibility tradeoff https://pytorch.org/docs/stable/notes/randomness.html
     torch.manual_seed(seed)
@@ -136,10 +124,6 @@ def profile(x, ops, n=100, device=None):
             m, nn.Module) else 0  # parameters
         print(
             f'{p:12}{flops:12.4g}{dtf:16.4g}{dtb:16.4g}{str(s_in):>24s}{str(s_out):>24s}')
-
-
-def is_parallel(model):
-    return type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
 
 
 def intersect_dicts(da, db, exclude=()):
@@ -298,10 +282,7 @@ class ModelEMA:
 
     def __init__(self, model, decay=0.9999, updates=0):
         # Create EMA
-        self.ema = deepcopy(model.module if is_parallel(
-            model) else model).eval()  # FP32 EMA
-        # if next(model.parameters()).device.type != 'cpu':
-        #     self.ema.half()  # FP16 EMA
+        self.ema = deepcopy(model).eval()  # FP32 EMA
         self.updates = updates  # number of EMA updates
         # decay exponential ramp (to help early epochs)
         self.decay = lambda x: decay * (1 - math.exp(-x / 2000))
@@ -314,8 +295,7 @@ class ModelEMA:
             self.updates += 1
             d = self.decay(self.updates)
 
-            msd = model.module.state_dict() if is_parallel(
-                model) else model.state_dict()  # model state_dict
+            msd = model.state_dict()  # model state_dict
             for k, v in self.ema.state_dict().items():
                 if v.dtype.is_floating_point:
                     v *= d

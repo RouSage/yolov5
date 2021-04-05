@@ -33,8 +33,7 @@ from utils.general import (check_dataset, check_file, check_git_status,
 from utils.google_utils import attempt_download
 from utils.loss import ComputeLoss
 from utils.plots import plot_evolution, plot_images, plot_labels, plot_results
-from utils.torch_utils import (ModelEMA, intersect_dicts, is_parallel,
-                               select_device, torch_distributed_zero_first)
+from utils.torch_utils import ModelEMA, intersect_dicts, select_device
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +66,7 @@ def train(hyp, opt, device):
     is_coco = opt.data.endswith('coco.yaml')
 
     # Logging- Doing this before checking the dataset. Might update data_dict
-    # loggers = {'wandb': None}  # loggers dict
-    if rank == -1:
-        opt.hyp = hyp  # add hyperparameters
+    opt.hyp = hyp  # add hyperparameters
 
     nc = int(data_dict['nc'])  # number of classes
     names = data_dict['names']  # class names
@@ -79,8 +76,7 @@ def train(hyp, opt, device):
     # Model
     pretrained = weights.endswith('.pt')
     if pretrained:
-        with torch_distributed_zero_first(rank):
-            attempt_download(weights)  # download if not found locally
+        attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
         model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get(
             'anchors')).to(device)  # create
@@ -95,8 +91,7 @@ def train(hyp, opt, device):
     else:
         model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get(
             'anchors')).to(device)  # create
-    with torch_distributed_zero_first(rank):
-        check_dataset(data_dict)  # check
+    check_dataset(data_dict)  # check
     train_path = data_dict['train']
     test_path = data_dict['val']
 
@@ -151,7 +146,7 @@ def train(hyp, opt, device):
     # plot_lr_scheduler(optimizer, scheduler, epochs)
 
     # EMA
-    ema = ModelEMA(model) if rank in [-1, 0] else None
+    ema = ModelEMA(model) if rank == -1 else None
 
     # Resume
     start_epoch, best_fitness = 0, 0.0
@@ -192,7 +187,7 @@ def train(hyp, opt, device):
 
     # Trainloader
     dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
-                                            hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
+                                            hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect,
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '))
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
@@ -203,7 +198,7 @@ def train(hyp, opt, device):
     # Process 0
     if rank == -1:
         testloader = create_dataloader(test_path, imgsz_test, batch_size * 2, gs, opt,  # testloader
-                                       hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True, rank=-1,
+                                       hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True,
                                        world_size=opt.world_size, workers=opt.workers,
                                        pad=0.5, prefix=colorstr('val: '))[0]
 
@@ -254,31 +249,17 @@ def train(hyp, opt, device):
         # Update image weights (optional)
         if opt.image_weights:
             # Generate indices
-            if rank in [-1, 0]:
-                cw = model.class_weights.cpu().numpy() * (1 - maps) ** 2 / nc  # class weights
-                iw = labels_to_image_weights(
-                    dataset.labels, nc=nc, class_weights=cw)  # image weights
-                dataset.indices = random.choices(
-                    range(dataset.n), weights=iw, k=dataset.n)  # rand weighted idx
-            # Broadcast if DDP
-            # if rank != -1:
-            #     indices = (torch.tensor(dataset.indices) if rank ==
-            #                0 else torch.zeros(dataset.n)).int()
-            #     dist.broadcast(indices, 0)
-            #     if rank != 0:
-            #         dataset.indices = indices.cpu().numpy()
-
-        # Update mosaic border
-        # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
-        # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
+            cw = model.class_weights.cpu().numpy() * (1 - maps) ** 2 / nc  # class weights
+            iw = labels_to_image_weights(
+                dataset.labels, nc=nc, class_weights=cw)  # image weights
+            dataset.indices = random.choices(
+                range(dataset.n), weights=iw, k=dataset.n)  # rand weighted idx
 
         mloss = torch.zeros(4, device=device)  # mean losses
-        if rank != -1:
-            dataloader.sampler.set_epoch(epoch)
         pbar = enumerate(dataloader)
         logger.info(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem',
                     'box', 'obj', 'cls', 'total', 'labels', 'img_size'))
-        if rank in [-1, 0]:
+        if rank == -1:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
         # batch -------------------------------------------------------------
@@ -499,10 +480,9 @@ if __name__ == '__main__':
     # opt.world_size = int(os.environ['WORLD_SIZE']
     #                      ) if 'WORLD_SIZE' in os.environ else 1
     opt.world_size = 1
-    # opt.global_rank = int(os.environ['RANK']) if 'RANK' in os.environ else -1
     opt.global_rank = -1
-    set_logging(opt.global_rank)
-    if opt.global_rank in [-1, 0]:
+    set_logging()
+    if opt.global_rank == -1:
         check_git_status()
         check_requirements()
 

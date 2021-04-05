@@ -30,10 +30,10 @@ os.environ['NUMEXPR_MAX_THREADS'] = str(
     min(os.cpu_count(), 8))  # NumExpr max threads
 
 
-def set_logging(rank=-1):
+def set_logging():
     logging.basicConfig(
         format="%(message)s",
-        level=logging.INFO if rank == -1 else logging.WARN)
+        level=logging.INFO)
 
 
 def init_seeds(seed=0):
